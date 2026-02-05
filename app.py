@@ -7,7 +7,6 @@ app = Flask(__name__)
 def home():
     return "🦅 Ahmad RDX YouTube Search & Download API is ONLINE."
 
-# --- 1. SEARCH ROUTE ---
 @app.route('/yt-search')
 def yt_search():
     query = request.args.get('q')
@@ -35,30 +34,36 @@ def yt_search():
     except Exception as e:
         return jsonify({"status": False, "error": str(e)})
 
-# --- 2. DOWNLOAD ROUTE (Ye 404 theek karega) ---
+# --- UPDATED DOWNLOAD ROUTE ---
 @app.route('/yt-dl')
 def yt_dl():
     url = request.args.get('url')
-    media_type = request.args.get('type', 'audio') # audio ya video
+    media_type = request.args.get('type', 'audio')
     
     if not url: return jsonify({"status": False, "msg": "URL missing"})
 
     try:
-        # Ahmad Bhai: Ye direct mp3/mp4 link nikalne ki logic hai
+        # Ahmad Bhai: Is mein maine specific headers daal diye hain
         ydl_opts = {
             'format': 'bestaudio/best' if media_type == 'audio' else 'best[ext=mp4]',
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            }
         }
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return jsonify({
                 "status": True,
                 "title": info.get('title'),
-                "download_url": info.get('url') # Direct stream link
+                "download_url": info.get('url')
             })
     except Exception as e:
+        # Ahmad bhai, yahan error log hoga toh aapko Render dashboard mein dikh jayega
+        print(f"Error extracting: {str(e)}")
         return jsonify({"status": False, "error": str(e)})
 
 if __name__ == '__main__':
