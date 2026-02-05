@@ -43,17 +43,20 @@ def yt_dl():
     if not url: return jsonify({"status": False, "msg": "URL missing"})
 
     try:
-        # Ahmad Bhai: Is mein maine specific headers daal diye hain
+        # Ahmad Bhai: Ye settings YouTube ke 'Sign-in' requirement ko bypass karne ke liye hain
         ydl_opts = {
             'format': 'bestaudio/best' if media_type == 'audio' else 'best[ext=mp4]',
             'quiet': True,
             'no_warnings': True,
             'nocheckcertificate': True,
-            'http_headers': {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            }
+            'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'referer': 'https://www.google.com/',
+            'add_header': [
+                'Accept-Language: en-US,en;q=0.9',
+            ],
+            'socket_timeout': 30 # Timeout barha diya taake Render wait kare
         }
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             return jsonify({
@@ -62,8 +65,8 @@ def yt_dl():
                 "download_url": info.get('url')
             })
     except Exception as e:
-        # Ahmad bhai, yahan error log hoga toh aapko Render dashboard mein dikh jayega
-        print(f"Error extracting: {str(e)}")
+        # Ye error log aapke Render dashboard mein nazar aayega
+        print(f"Extraction Error: {str(e)}")
         return jsonify({"status": False, "error": str(e)})
 
 if __name__ == '__main__':
