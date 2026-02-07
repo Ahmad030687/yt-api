@@ -1,7 +1,5 @@
 import requests
 from flask import Flask, request, jsonify
-from duckduckgo_search import DDGS
-import wikipedia
 import random
 import os
 
@@ -10,60 +8,45 @@ app = Flask(__name__)
 # 🛡️ Anti-Block Headers
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1"
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
 ]
 
 # ----------------------------------------------------
-# 1. DUCKDUCKGO SEARCH (Primary)
+# 1. BING SEARCH ENGINE (Unstoppable Method)
 # ----------------------------------------------------
-def search_ddg(query):
+def search_bing(query):
     try:
-        # Official Library use kar rahe hain
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=1))
-            if results and 'body' in results[0]:
-                print("✅ Source: DuckDuckGo")
-                return results[0]['body']
+        # Bing ka secret rasta (Search suggestions/snippets)
+        url = f"https://www.bing.com/AS/Suggestions?pt=S&mkt=en-us&qry={query}"
+        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        
+        resp = requests.get(url, headers=headers, timeout=10)
+        
+        # Bing HTML se data nikalna
+        from bs4 import BeautifulSoup
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Bing aksar 'sa_tm' ya 'sa_sh' classes mein data deta hai
+        results = soup.find_all('div', class_='sa_tm')
+        if not results:
+            # Plan B: Wikipedia
+            wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
+            wiki_resp = requests.get(wiki_url, timeout=5)
+            if wiki_resp.status_code == 200:
+                return wiki_resp.json().get('extract')
+        
+        # Sab results ko jor kar ek paragraph bana dena
+        combined_text = ""
+        for res in results[:2]: # Top 2 results
+            combined_text += res.get_text(strip=True) + " "
+            
+        return combined_text if combined_text else None
     except Exception as e:
-        print(f"⚠️ DDG Fail: {e}")
-    return None
+        print(f"Bing Error: {e}")
+        return None
 
 # ----------------------------------------------------
-# 2. WIKIPEDIA SEARCH (Secondary - Backup)
-# ----------------------------------------------------
-def search_wiki(query):
-    try:
-        # Wikipedia kabhi block nahi hota
-        # Hum English Wikipedia se summary uthayenge
-        wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
-        resp = requests.get(wiki_url, timeout=5)
-        if resp.status_code == 200:
-            data = resp.json()
-            if 'extract' in data:
-                print("✅ Source: Wikipedia")
-                return data['extract']
-    except Exception as e:
-        print(f"⚠️ Wiki Fail: {e}")
-    return None
-
-# ----------------------------------------------------
-# 3. DUCKDUCKGO INSTANT ANSWER (Tertiary - Backup)
-# ----------------------------------------------------
-def search_ddg_api(query):
-    try:
-        # Ye official API hai jo bots ke liye hai (No Block)
-        url = f"https://api.duckduckgo.com/?q={query}&format=json"
-        resp = requests.get(url, timeout=5)
-        data = resp.json()
-        if 'AbstractText' in data and data['AbstractText']:
-            print("✅ Source: DDG API")
-            return data['AbstractText']
-    except:
-        pass
-    return None
-
-# ----------------------------------------------------
-# 4. TRANSLATOR (English -> Urdu)
+# 2. GOOGLE TRANSLATE (English -> Urdu)
 # ----------------------------------------------------
 def google_translate(text, target_lang='ur'):
     try:
@@ -81,8 +64,8 @@ def google_translate(text, target_lang='ur'):
                 if part[0]:
                     translated_text += part[0]
         return translated_text
-    except Exception as e:
-        return f"Translation Error: {str(e)}"
+    except:
+        return text
 
 # 🌐 MAIN API ROUTE
 @app.route('/api/smart-urdu', methods=['GET'])
@@ -90,36 +73,25 @@ def smart_urdu():
     query = request.args.get('q')
     if not query: return jsonify({"status": False, "msg": "Query missing!"})
 
-    # 🔥 ENGINE START: Ek ke baad ek try karo
+    # Bing se data lo
+    english_answer = search_bing(query)
     
-    # 1. Try DuckDuckGo
-    english_answer = search_ddg(query)
-    
-    # 2. Agar fail, Try Wikipedia
-    if not english_answer:
-        english_answer = search_wiki(query)
-        
-    # 3. Agar fail, Try DDG API
-    if not english_answer:
-        english_answer = search_ddg_api(query)
-
-    # 4. Agar sab fail ho jayein
     if not english_answer:
         return jsonify({
             "status": False, 
-            "msg": "Server busy hai, lekin humne koshish poori ki. Wiki/DDG ne data nahi diya."
+            "msg": "Bing aur Wiki dono se data nahi mila."
         })
 
-    # 5. Translate Result
+    # Translate to Urdu
     urdu_answer = google_translate(english_answer, 'ur')
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Multi-Engine)",
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Bing Engine)",
         "original": english_answer,
         "translated": urdu_answer
     })
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+    app.run(host='0.0.0.0', port=10000)
     
