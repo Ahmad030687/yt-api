@@ -1,55 +1,35 @@
-import requests
-from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
+from duckduckgo_search import DDGS
+import requests
 import random
 import os
 import time
 
 app = Flask(__name__)
 
-# 🛡️ Real Browser Headers (Taake hum insaan lagen)
+# 🛡️ Browser Headers (Translation ke liye)
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Mobile Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/123.0.0.0 Safari/537.36"
 ]
 
-# 1. DUCKDUCKGO HTML SEARCH (POST Method - Anti Block)
-def get_ddg_search(query):
-    url = "https://html.duckduckgo.com/html/"
-    
-    # 🕵️ Fake Form Submission
-    payload = {'q': query}
-    
-    headers = {
-        "User-Agent": random.choice(USER_AGENTS),
-        "Referer": "https://html.duckduckgo.com/",
-        "Origin": "https://html.duckduckgo.com",
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    
+# 1. DUCKDUCKGO OFFICIAL SEARCH
+def get_ddg_result(query):
     try:
-        # POST request bhej rahe hain (Ye GET se zyada strong hai)
-        resp = requests.post(url, data=payload, headers=headers, timeout=10)
-        
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
+        # Official Library Initialize
+        with DDGS() as ddgs:
+            # Hum 'text' search use kar rahe hain jo sabse fast hai
+            # max_results=1 taake pehla aur sabse best jawab mile
+            results = list(ddgs.text(query, region='wt-wt', safesearch='off', max_results=1))
             
-            # HTML se snippet nikalna
-            snippets = []
-            for result in soup.select('.result__snippet'):
-                text = result.get_text(strip=True)
-                if text:
-                    snippets.append(text)
-            
-            # Agar result mil gaya to top 2 lines wapis karo
-            if snippets:
-                return " ".join(snippets[:2])
+            if results:
+                # 'body' mein main snippet hota hai
+                return results[0]['body']
                 
-        return None
     except Exception as e:
         print(f"DDG Error: {e}")
         return None
+    return None
 
 # 2. GOOGLE TRANSLATE (English -> Urdu)
 def google_translate(text, target_lang='ur'):
@@ -58,7 +38,7 @@ def google_translate(text, target_lang='ur'):
         params = {
             "client": "gtx",
             "sl": "auto", 
-            "tl": target_lang, # Urdu
+            "tl": target_lang, # Urdu (ur)
             "dt": "t",
             "q": text
         }
@@ -85,26 +65,25 @@ def smart_urdu():
     if not query:
         return jsonify({"status": False, "msg": "Sawal missing hai!"})
 
-    # Step 1: DuckDuckGo se English Data lo
-    english_answer = get_ddg_search(query)
+    # Retry Logic: Agar pehli baar mein fail ho to 1 second baad dubara try karo
+    english_answer = get_ddg_result(query)
     
-    # Agar pehli baar mein na mile to 1 second ruk kar dobara try karo
     if not english_answer:
-        time.sleep(1)
-        english_answer = get_ddg_search(query)
+        time.sleep(1) # Thora saans lo
+        english_answer = get_ddg_result(query)
 
     if not english_answer:
         return jsonify({
             "status": False, 
-            "msg": "DuckDuckGo busy hai. Thori der baad try karein."
+            "msg": "DuckDuckGo connect nahi ho saka. Dobara try karein."
         })
 
-    # Step 2: Translate to Urdu (Nastaliq)
+    # Translate
     urdu_answer = google_translate(english_answer, 'ur')
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (DuckDuckGo + Urdu)",
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Official DDG)",
         "original": english_answer,
         "translated": urdu_answer
     })
