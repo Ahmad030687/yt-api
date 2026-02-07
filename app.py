@@ -1,59 +1,44 @@
-from flask import Flask, request, jsonify
-import yt_dlp
 import os
+import google.generativeai as genai
+from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
+# 🔑 Replit Secrets se Key uthana (Security ke liye)
+api_key = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=api_key)
+
 @app.route('/')
 def home():
-    return "🦅 𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐏𝐘𝐓𝐇𝐎𝐍 - Server is Live & Fixed!"
+    return "🦅 𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐀𝐈 - Gemini Live Research Active!"
 
-@app.route('/ahmad-dl')
-def download():
-    url = request.args.get('url')
-    if not url:
-        return jsonify({"status": False, "msg": "Link missing!"})
-
-    # 🛡️ UPDATED SETTINGS: To bypass YouTube Bot Detection
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'quiet': True,
-        'no_warnings': True,
-        'extract_flat': False,
-        'skip_download': True,
-        # Ye headers YouTube ko dhoka dene ke liye hain
-        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
-        'referer': 'https://www.youtube.com/',
-        'nocheckcertificate': True,
-        'geo_bypass': True,
-        'http_headers': {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        }
-    }
+@app.route('/api/search', methods=['GET'])
+def ai_search():
+    query = request.args.get('q')
+    if not query:
+        return jsonify({"status": False, "msg": "Sawal missing hai!"})
 
     try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Metadata extract karna
-            info = ydl.extract_info(url, download=False)
-            direct_url = info.get('url')
-            
-            if direct_url:
-                return jsonify({
-                    "status": True,
-                    "brand": "𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗",
-                    "title": info.get('title', 'Unknown Music'),
-                    "duration": info.get('duration'),
-                    "thumbnail": info.get('thumbnail'),
-                    "url": direct_url
-                })
-            return jsonify({"status": False, "msg": "YouTube restricted this link for bots."})
-            
+        # 🧠 Gemini 2.0 Flash / 1.5 Pro Model with LIVE SEARCH
+        # Hum AI ko tool de rahe hain ke wo Google par search kare
+        model = genai.GenerativeModel(
+            model_name='gemini-1.5-flash', # Aap 2.0-flash-exp bhi use kar sakte hain
+            tools=[{"google_search": {}}] 
+        )
+
+        # AI ko instruction: Direct Google se scan kar ke jawab do
+        response = model.generate_content(f"You are Ahmad RDX's Global Research AI. Search the live web and provide a 100% accurate, real-time answer for: {query}")
+
+        return jsonify({
+            "status": True,
+            "brand": "𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐀𝐈",
+            "answer": response.text
+        })
+
     except Exception as e:
-        # Pura error bhej rahe hain taake bot mein nazar aaye kya masla hai
-        return jsonify({"status": False, "error": str(e), "msg": "Sign-in check or IP Blocked by YouTube"})
+        return jsonify({"status": False, "error": str(e)})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
+    # Replit automatically port set karta hai
+    app.run(host='0.0.0.0', port=8080)
     
