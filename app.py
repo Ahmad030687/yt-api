@@ -1,35 +1,59 @@
-from flask import Flask, request, jsonify
-from duckduckgo_search import DDGS
 import requests
+from bs4 import BeautifulSoup
+from flask import Flask, request, jsonify
 import random
 import os
-import time
+import urllib.parse
 
 app = Flask(__name__)
 
-# 🛡️ Browser Headers (Translation ke liye)
+# 🛡️ Mobile Headers (Taake hum purana phone lagen)
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/123.0.0.0 Safari/537.36"
+    "Mozilla/5.0 (Linux; Android 4.4.2; Nexus 4 Build/KOT49H) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/34.0.1847.114 Mobile Safari/537.36",
+    "Mozilla/5.0 (Linux; U; Android 4.1.1; en-gb; Build/KLP) AppleWebKit/534.30 (KHTML, like Gecko) Version/4.0 Safari/534.30"
 ]
 
-# 1. DUCKDUCKGO OFFICIAL SEARCH
-def get_ddg_result(query):
+# 1. DUCKDUCKGO LITE SEARCH (The Unblockable Method)
+def get_ddg_lite(query):
+    # Ye URL sab se important hai. 'lite' version block nahi hota.
+    url = "https://lite.duckduckgo.com/lite/"
+    
+    payload = {'q': query}
+    headers = {
+        "User-Agent": random.choice(USER_AGENTS),
+        "Referer": "https://lite.duckduckgo.com/",
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    
     try:
-        # Official Library Initialize
-        with DDGS() as ddgs:
-            # Hum 'text' search use kar rahe hain jo sabse fast hai
-            # max_results=1 taake pehla aur sabse best jawab mile
-            results = list(ddgs.text(query, region='wt-wt', safesearch='off', max_results=1))
+        # Session use kar rahe hain taake cookies save hon
+        session = requests.Session()
+        resp = session.post(url, data=payload, headers=headers, timeout=10)
+        
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Lite version mein data table mein hota hai
+        # Hum pehla snippet dhoond rahe hain
+        snippets = []
+        
+        # Table rows ko scan karo
+        rows = soup.find_all('tr')
+        for row in rows:
+            # Result snippet class usually nahi hoti, raw text uthana parta hai
+            text = row.get_text(strip=True)
+            # Filter: Check karo ke ye result hai ya kachra
+            if len(text) > 50 and "DuckDuckGo" not in text and "Privacy" not in text:
+                snippets.append(text)
+                if len(snippets) >= 1: break # Sirf pehla result chahiye
+        
+        if snippets:
+            return snippets[0]
             
-            if results:
-                # 'body' mein main snippet hota hai
-                return results[0]['body']
-                
-    except Exception as e:
-        print(f"DDG Error: {e}")
         return None
-    return None
+
+    except Exception as e:
+        print(f"Lite Error: {e}")
+        return None
 
 # 2. GOOGLE TRANSLATE (English -> Urdu)
 def google_translate(text, target_lang='ur'):
@@ -38,12 +62,12 @@ def google_translate(text, target_lang='ur'):
         params = {
             "client": "gtx",
             "sl": "auto", 
-            "tl": target_lang, # Urdu (ur)
+            "tl": target_lang, # Urdu
             "dt": "t",
             "q": text
         }
         
-        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        headers = {"User-Agent": "Mozilla/5.0"}
         resp = requests.get(base_url, params=params, headers=headers, timeout=5)
         data = resp.json()
         
@@ -55,7 +79,7 @@ def google_translate(text, target_lang='ur'):
                     
         return translated_text
     except Exception as e:
-        return f"Translation Error: {str(e)}"
+        return str(e)
 
 # 🌐 API ROUTE
 @app.route('/api/smart-urdu', methods=['GET'])
@@ -65,25 +89,30 @@ def smart_urdu():
     if not query:
         return jsonify({"status": False, "msg": "Sawal missing hai!"})
 
-    # Retry Logic: Agar pehli baar mein fail ho to 1 second baad dubara try karo
-    english_answer = get_ddg_result(query)
+    # Step 1: DuckDuckGo LITE se English Data lo
+    english_answer = get_ddg_lite(query)
     
     if not english_answer:
-        time.sleep(1) # Thora saans lo
-        english_answer = get_ddg_result(query)
+        # Fallback: Agar Lite bhi fail ho to seedha Wikipedia check kar lo
+        try:
+            wiki_resp = requests.get(f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}")
+            if wiki_resp.status_code == 200:
+                english_answer = wiki_resp.json().get('extract')
+        except:
+            pass
 
     if not english_answer:
         return jsonify({
             "status": False, 
-            "msg": "DuckDuckGo connect nahi ho saka. Dobara try karein."
+            "msg": "Maaf karein, koi data nahi mila."
         })
 
-    # Translate
+    # Step 2: Urdu Translate
     urdu_answer = google_translate(english_answer, 'ur')
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Official DDG)",
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (DDG Lite)",
         "original": english_answer,
         "translated": urdu_answer
     })
