@@ -6,7 +6,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "🦅 𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐏𝐘𝐓𝐇𝐎𝐍 - Server is Live!"
+    return "🦅 𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐏𝐘𝐓𝐇𝐎𝐍 - Server is Live & Fixed!"
 
 @app.route('/ahmad-dl')
 def download():
@@ -14,27 +14,28 @@ def download():
     if not url:
         return jsonify({"status": False, "msg": "Link missing!"})
 
-    # 🛠️ PRO SETTINGS: Faster extraction & Audio focus
+    # 🛡️ UPDATED SETTINGS: To bypass YouTube Bot Detection
     ydl_opts = {
-        'format': 'bestaudio/best', # Sirf audio ka best link nikalna
+        'format': 'bestaudio/best',
         'quiet': True,
         'no_warnings': True,
         'extract_flat': False,
         'skip_download': True,
-        'force_generic_extractor': False,
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
+        # Ye headers YouTube ko dhoka dene ke liye hain
+        'user_agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'referer': 'https://www.youtube.com/',
+        'nocheckcertificate': True,
+        'geo_bypass': True,
+        'http_headers': {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+        }
     }
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            # Info extract karna bina download kiye
+            # Metadata extract karna
             info = ydl.extract_info(url, download=False)
-            
-            # Direct Stream URL nikalna
             direct_url = info.get('url')
             
             if direct_url:
@@ -44,12 +45,13 @@ def download():
                     "title": info.get('title', 'Unknown Music'),
                     "duration": info.get('duration'),
                     "thumbnail": info.get('thumbnail'),
-                    "url": direct_url # Ye asli audio link hai
+                    "url": direct_url
                 })
-            return jsonify({"status": False, "msg": "Could not extract direct link!"})
+            return jsonify({"status": False, "msg": "YouTube restricted this link for bots."})
             
     except Exception as e:
-        return jsonify({"status": False, "error": str(e)})
+        # Pura error bhej rahe hain taake bot mein nazar aaye kya masla hai
+        return jsonify({"status": False, "error": str(e), "msg": "Sign-in check or IP Blocked by YouTube"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
