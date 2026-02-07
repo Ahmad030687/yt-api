@@ -5,41 +5,32 @@ import os
 
 app = Flask(__name__)
 
-# 🔑 RapidAPI Credentials (Jo aapne provide kiye)
+# 🔑 Nayi Google Search API Credentials
 RAPID_API_KEY = "6f52b7d6a4msh63cfa1e9ad2f0bbp1c46a5jsna5344b9fe618"
-RAPID_API_HOST = "duckduckgo-duckduckgo-zero-click-info.p.rapidapi.com"
+RAPID_API_HOST = "google-search116.p.rapidapi.com"
 
-# 1. RAPID-SEARCH FUNCTION
-def search_rapid_ddg(query):
-    url = "https://duckduckgo-duckduckgo-zero-click-info.p.rapidapi.com/"
-    
-    querystring = {
-        "q": query,
-        "no_html": "1",
-        "no_redirect": "1",
-        "skip_disambig": "1",
-        "format": "json"
-    }
-
+# 1. GOOGLE SEARCH FUNCTION (RapidAPI)
+def search_google_rapid(query):
+    url = "https://google-search116.p.rapidapi.com/search"
+    querystring = {"q": query}
     headers = {
         "x-rapidapi-key": RAPID_API_KEY,
         "x-rapidapi-host": RAPID_API_HOST
     }
 
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        response = requests.get(url, headers=headers, params=querystring, timeout=15)
         data = response.json()
         
-        # DuckDuckGo Zero Click Info 'AbstractText' mein jawab deta hai
-        if data.get("AbstractText"):
-            return data["AbstractText"]
-        # Agar Abstract khali ho toh RelatedTopics se pehla snippet uthao
-        elif data.get("RelatedTopics") and len(data["RelatedTopics"]) > 0:
-            return data["RelatedTopics"][0].get("Text")
+        # Google Search API results 'results' array mein deti hai
+        if data.get("results") and len(data["results"]) > 0:
+            # Pehle 2-3 results ko combine karke summary banana
+            snippets = [res.get("description", "") for res in data["results"][:2]]
+            return " ".join(snippets)
             
         return None
     except Exception as e:
-        print(f"RapidAPI Error: {e}")
+        print(f"Google API Error: {e}")
         return None
 
 # 2. GOOGLE TRANSLATE (English -> Urdu)
@@ -67,13 +58,13 @@ def smart_urdu():
     query = request.args.get('q')
     if not query: return jsonify({"status": False, "msg": "Query missing!"})
 
-    # Step 1: RapidAPI se data lo
-    english_answer = search_rapid_ddg(query)
+    # Step 1: Real Google Search se data lo
+    english_answer = search_google_rapid(query)
     
     if not english_answer:
         return jsonify({
             "status": False, 
-            "msg": "RapidAPI ne is sawal ka jawab nahi diya. Kuch aur poochein."
+            "msg": "Google ne is sawal ka jawab nahi diya."
         })
 
     # Step 2: Translate to Urdu
@@ -81,8 +72,8 @@ def smart_urdu():
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (RapidAPI)",
-        "original": english_answer,
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Google Engine)",
+        "original": english_answer[:500], # First 500 chars for reference
         "translated": urdu_answer
     })
 
