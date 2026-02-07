@@ -4,3 +4,4 @@ yt-dlp
 gunicorn
 google-generativeai
 beautifulsoup4
+duckduckgo-search
