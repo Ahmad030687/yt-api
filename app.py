@@ -1,40 +1,49 @@
-from flask import Flask, request, jsonify
-from duckduckgo_search import DDGS
 import requests
+from bs4 import BeautifulSoup
+from flask import Flask, request, jsonify
 import random
 import os
 
 app = Flask(__name__)
 
-# 🛡️ Browser Headers (Translation ke liye)
+# 🛡️ Browser Headers
 USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0.0.0 Safari/537.36",
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0.0.0 Safari/537.36"
 ]
 
-# 1. SEARCH FUNCTION (Library Method - Anti Block)
+# 1. SEARCH FUNCTION (English Data)
 def get_search_result(query):
+    url = "https://html.duckduckgo.com/html/"
+    payload = {'q': query}
+    headers = {"User-Agent": random.choice(USER_AGENTS), "Referer": "https://html.duckduckgo.com/"}
+    
     try:
-        # DDGS library use kar rahe hain jo block nahi hoti
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=1))
-            if results:
-                # 'body' mein main jawab hota hai
-                return results[0]['body']
+        resp = requests.post(url, data=payload, headers=headers, timeout=5)
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        
+        # Top snippet uthao
+        for result in soup.select('.result'):
+            snippet = result.select_one('.result__snippet')
+            if snippet:
+                # Sirf pehli 2 lines uthao taake jawab lamba na ho
+                text = snippet.get_text(strip=True)
+                return text[:300] # Max 300 characters
         return None
-    except Exception as e:
-        print(f"Search Error: {e}")
+    except:
         return None
 
-# 2. GOOGLE TRANSLATE FUNCTION (English -> Urdu)
-def google_translate(text, target_lang='ur'):
+# 2. GOOGLE ROMANIZER (The Secret Hack)
+def get_roman_urdu(text):
     try:
+        # Hum 'hi' (Hindi) use kar rahe hain kyunke Google uski Romanization deta hai
+        # Bolne mein Hindi/Urdu same hain.
         base_url = "https://translate.googleapis.com/translate_a/single"
         params = {
             "client": "gtx",
-            "sl": "auto", 
-            "tl": target_lang, # Urdu
-            "dt": "t",
+            "sl": "auto",
+            "tl": "hi",    # Target Hindi (Roman ke liye)
+            "dt": ["t", "rm"], # 't'=Translation, 'rm'=Romanization
             "q": text
         }
         
@@ -42,19 +51,32 @@ def google_translate(text, target_lang='ur'):
         resp = requests.get(base_url, params=params, headers=headers, timeout=5)
         data = resp.json()
         
-        translated_text = ""
+        # Google JSON Structure: data[0] mein translation hoti hai
+        # data[0] ka last element aksar Romanization hota hai
+        
         if data and data[0]:
-            for part in data[0]:
-                if part[0]:
-                    translated_text += part[0]
-                    
-        return translated_text
+            # Akri element check karte hain jo string ho
+            last_item = data[0][-1]
+            if isinstance(last_item, list):
+                # Kabhi kabhi array ke last index pe roman text hota hai
+                return last_item[-1] 
+            elif isinstance(last_item, str):
+                return last_item
+            
+            # Fallback: Agar upar wala fail ho, to loop chalao
+            roman_text = ""
+            for item in data[0]:
+                if len(item) >= 4 and item[3]: # Index 3 par aksar Roman hota hai
+                    roman_text += item[3] + " "
+            return roman_text.strip()
+            
+        return "Translation Error"
     except Exception as e:
-        return f"Translation Error: {str(e)}"
+        return str(e)
 
 # 🌐 API ROUTE
-@app.route('/api/smart-urdu', methods=['GET'])
-def smart_urdu():
+@app.route('/api/roman-google', methods=['GET'])
+def roman_google():
     query = request.args.get('q')
     
     if not query:
@@ -64,20 +86,16 @@ def smart_urdu():
     english_answer = get_search_result(query)
     
     if not english_answer:
-        # Fallback: Agar search fail ho to message
-        return jsonify({
-            "status": False, 
-            "msg": "Search Engine Busy. Try again in 5 seconds."
-        })
+        return jsonify({"status": False, "msg": "Jawab nahi mila."})
 
-    # Step 2: Translate to Urdu
-    urdu_answer = google_translate(english_answer, 'ur')
+    # Step 2: Convert to Roman Urdu
+    roman_answer = get_roman_urdu(english_answer)
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (DDGS + Google)",
-        "original": english_answer,
-        "translated": urdu_answer
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Google Roman)",
+        "english": english_answer,
+        "roman_urdu": roman_answer
     })
 
 if __name__ == "__main__":
