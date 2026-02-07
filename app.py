@@ -5,57 +5,51 @@ import os
 
 app = Flask(__name__)
 
-# 🛡️ Anti-Block Headers
-USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/123.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-]
+# 🔑 RapidAPI Credentials (Jo aapne provide kiye)
+RAPID_API_KEY = "6f52b7d6a4msh63cfa1e9ad2f0bbp1c46a5jsna5344b9fe618"
+RAPID_API_HOST = "duckduckgo-duckduckgo-zero-click-info.p.rapidapi.com"
 
-# ----------------------------------------------------
-# 1. BING SEARCH ENGINE (Unstoppable Method)
-# ----------------------------------------------------
-def search_bing(query):
+# 1. RAPID-SEARCH FUNCTION
+def search_rapid_ddg(query):
+    url = "https://duckduckgo-duckduckgo-zero-click-info.p.rapidapi.com/"
+    
+    querystring = {
+        "q": query,
+        "no_html": "1",
+        "no_redirect": "1",
+        "skip_disambig": "1",
+        "format": "json"
+    }
+
+    headers = {
+        "x-rapidapi-key": RAPID_API_KEY,
+        "x-rapidapi-host": RAPID_API_HOST
+    }
+
     try:
-        # Bing ka secret rasta (Search suggestions/snippets)
-        url = f"https://www.bing.com/AS/Suggestions?pt=S&mkt=en-us&qry={query}"
-        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        response = requests.get(url, headers=headers, params=querystring, timeout=10)
+        data = response.json()
         
-        resp = requests.get(url, headers=headers, timeout=10)
-        
-        # Bing HTML se data nikalna
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        
-        # Bing aksar 'sa_tm' ya 'sa_sh' classes mein data deta hai
-        results = soup.find_all('div', class_='sa_tm')
-        if not results:
-            # Plan B: Wikipedia
-            wiki_url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{query}"
-            wiki_resp = requests.get(wiki_url, timeout=5)
-            if wiki_resp.status_code == 200:
-                return wiki_resp.json().get('extract')
-        
-        # Sab results ko jor kar ek paragraph bana dena
-        combined_text = ""
-        for res in results[:2]: # Top 2 results
-            combined_text += res.get_text(strip=True) + " "
+        # DuckDuckGo Zero Click Info 'AbstractText' mein jawab deta hai
+        if data.get("AbstractText"):
+            return data["AbstractText"]
+        # Agar Abstract khali ho toh RelatedTopics se pehla snippet uthao
+        elif data.get("RelatedTopics") and len(data["RelatedTopics"]) > 0:
+            return data["RelatedTopics"][0].get("Text")
             
-        return combined_text if combined_text else None
+        return None
     except Exception as e:
-        print(f"Bing Error: {e}")
+        print(f"RapidAPI Error: {e}")
         return None
 
-# ----------------------------------------------------
 # 2. GOOGLE TRANSLATE (English -> Urdu)
-# ----------------------------------------------------
 def google_translate(text, target_lang='ur'):
     try:
         base_url = "https://translate.googleapis.com/translate_a/single"
         params = {
             "client": "gtx", "sl": "auto", "tl": target_lang, "dt": "t", "q": text
         }
-        headers = {"User-Agent": random.choice(USER_AGENTS)}
-        resp = requests.get(base_url, params=params, headers=headers, timeout=5)
+        resp = requests.get(base_url, params=params, timeout=5)
         data = resp.json()
         
         translated_text = ""
@@ -67,27 +61,27 @@ def google_translate(text, target_lang='ur'):
     except:
         return text
 
-# 🌐 MAIN API ROUTE
+# 🌐 API ROUTE
 @app.route('/api/smart-urdu', methods=['GET'])
 def smart_urdu():
     query = request.args.get('q')
     if not query: return jsonify({"status": False, "msg": "Query missing!"})
 
-    # Bing se data lo
-    english_answer = search_bing(query)
+    # Step 1: RapidAPI se data lo
+    english_answer = search_rapid_ddg(query)
     
     if not english_answer:
         return jsonify({
             "status": False, 
-            "msg": "Bing aur Wiki dono se data nahi mila."
+            "msg": "RapidAPI ne is sawal ka jawab nahi diya. Kuch aur poochein."
         })
 
-    # Translate to Urdu
+    # Step 2: Translate to Urdu
     urdu_answer = google_translate(english_answer, 'ur')
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Bing Engine)",
+        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (RapidAPI)",
         "original": english_answer,
         "translated": urdu_answer
     })
