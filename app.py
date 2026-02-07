@@ -1,82 +1,79 @@
-import os
 import requests
+from bs4 import BeautifulSoup
 import random
 from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-# 🔑 UNLIMITED KEYS POOL
-# Jitni marzi keys yahan add karein
-KEYS = [
-    "AIzaSyB-oKyz7BlIz2k97d2Ln1PmV_o5U3fWrKk",
-    "AIzaSyC-gp50_CveVGdoYANVvWXUsk6lFn9Ggec",
-    "AIzaSyC0_syf_nF2-YHkfbK3oaSc20CxNp3skSU",
-    "AIzaSyBhCiVOyjt3C7u8BwPUTrVYgEf1_l_T1Os",
-    "AIzaSyCPOiw3O7rijjI6v0F3brfHod7jDXI39JU"
-    # "AIzaSy..." (Aur keys bhi add kar sakte hain)
+# 🛡️ User-Agent Pool
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1"
 ]
 
-@app.route('/')
-def home():
-    return "🦅 𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐀𝐈 - Unlimited Multi-Key Engine Active!"
+# 🌐 Function to get fresh free proxies
+def get_free_proxies():
+    try:
+        url = "https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all"
+        resp = requests.get(url)
+        proxies = resp.text.split('\r\n')
+        return [p for p in proxies if p]
+    except:
+        return []
 
-@app.route('/api/search', methods=['GET'])
-def ai_search():
+@app.route('/api/google', methods=['GET'])
+def google_scraper():
     query = request.args.get('q')
     if not query:
-        return jsonify({"status": False, "msg": "Sawal missing hai!"})
+        return jsonify({"status": False, "msg": "Search query missing!"})
 
-    # 🔄 AUTO-RETRY LOGIC: Aik key fail ho toh dusri try karo
-    random.shuffle(KEYS) # Keys ko mix kar dena taake load barabar rahe
+    proxies_list = get_free_proxies()
+    url = f"https://www.google.com/search?q={query}&num=10&hl=en"
     
-    for key in KEYS:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={key}"
-        headers = {'Content-Type': 'application/json'}
+    # Retry logic: Agar aik proxy fail ho toh dusri try karo
+    for i in range(5):  # Max 5 retries
+        headers = {"User-Agent": random.choice(USER_AGENTS)}
+        proxy_config = None
         
-        # 🧠 Fixed Payload (v1beta Official Standard)
-        payload = {
-            "contents": [{
-                "parts": [{
-                    "text": f"Current Time: February 7, 2026. Search the web and answer accurately: {query}"
-                }]
-            }],
-            "tools": [{
-                "google_search_retrieval": {
-                    "dynamic_retrieval_config": {
-                        "mode": "MODE_DYNAMIC", # 👈 Fixed: "DYNAMIC" se "MODE_DYNAMIC" kar diya
-                        "dynamic_threshold": 0.3
-                    }
-                }
-            }]
-        }
-
+        if proxies_list:
+            proxy = random.choice(proxies_list)
+            proxy_config = {"http": f"http://{proxy}", "https": f"http://{proxy}"}
+        
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=20)
-            res_data = response.json()
-
-            # Agar response mein answer hai toh return karo
-            if "candidates" in res_data:
-                answer = res_data['candidates'][0]['content']['parts'][0]['text']
-                return jsonify({
-                    "status": True,
-                    "brand": "𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐀𝐈",
-                    "answer": answer
-                })
+            # Proxy ke sath request bhejna
+            response = requests.get(url, headers=headers, proxies=proxy_config, timeout=10)
             
-            # Agar key limit hit hui hai, toh loop jari rakho (Next key check karo)
-            print(f"Key {key[:10]}... failed, trying next key.")
-            continue
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.text, 'html.parser')
+                results = []
 
+                for g in soup.select('.tF2Cxc'):
+                    title = g.select_one('h3')
+                    link = g.select_one('a')
+                    snippet = g.select_one('.VwiC3b')
+
+                    if title and link:
+                        results.append({
+                            "title": title.get_text(),
+                            "link": link['href'],
+                            "description": snippet.get_text() if snippet else "No description"
+                        })
+
+                if results:
+                    return jsonify({
+                        "status": True,
+                        "brand": "𝐒𝐀𝐑𝐃𝐀𝐑 𝐑𝐃𝐗 𝐏𝐑𝐎 𝐒𝐂𝐑𝐀𝐏𝐄𝐑",
+                        "proxy_used": proxy if proxy_config else "Direct IP",
+                        "results": results
+                    })
+        
         except Exception as e:
-            print(f"Error with key: {str(e)}")
+            print(f"Proxy {proxy} failed, retrying...")
             continue
 
-    # Agar saari keys fail ho jayein
-    return jsonify({
-        "status": False, 
-        "error": "Saari keys ki limit khatam ho chuki hai. Nayi keys add karein!"
-    })
+    return jsonify({"status": False, "msg": "Google is blocking all requests right now. Try again later."})
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=int(os.environ.get("PORT", 10000)))
+    app.run(host='0.0.0.0', port=10000)
     
