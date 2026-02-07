@@ -11,7 +11,7 @@ KEYS = [
     "AIzaSyB-oKyz7BlIz2k97d2Ln1PmV_o5U3fWrKk", # Key 1
     "AIzaSyC-gp50_CveVGdoYANVvWXUsk6lFn9Ggec",          # Key 2
     "AIzaSyC0_syf_nF2-YHkfbK3oaSc20CxNp3skSU",
-    "AIzaSyBhCiVOyjt3C7u8BwPUTrVYgEf1_l_T1Os,
+    "AIzaSyBhCiVOyjt3C7u8BwPUTrVYgEf1_l_T1Os",
     "AIzaSyCPOiw3O7rijjI6v0F3brfHod7jDXI39JU"
 ]
 
