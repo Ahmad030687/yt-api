@@ -1,82 +1,102 @@
-import requests
 from flask import Flask, request, jsonify
-import random
-import os
+import requests
+from bs4 import BeautifulSoup
 
 app = Flask(__name__)
 
-# 🔑 Nayi Google Search API Credentials
-RAPID_API_KEY = "6f52b7d6a4msh63cfa1e9ad2f0bbp1c46a5jsna5344b9fe618"
-RAPID_API_HOST = "google-search116.p.rapidapi.com"
+# ----------------------------------
+# helper
+# ----------------------------------
+def clean(text):
+    return " ".join(text.split())
 
-# 1. GOOGLE SEARCH FUNCTION (RapidAPI)
-def search_google_rapid(query):
-    url = "https://google-search116.p.rapidapi.com/search"
-    querystring = {"q": query}
-    headers = {
-        "x-rapidapi-key": RAPID_API_KEY,
-        "x-rapidapi-host": RAPID_API_HOST
-    }
 
+# ----------------------------------
+# API
+# ----------------------------------
+@app.route("/")
+def home():
+    return "AHMAD RDX Search Engine Running"
+
+
+@app.route("/api/search", methods=["GET"])
+def search():
+    q = request.args.get("q")
+    lang = request.args.get("lang", "roman")
+
+    if not q:
+        return jsonify({"status": False, "error": "Query missing"})
+
+    results = []
+    answer = ""
+
+    # ----------------------------------
+    # 1️⃣ DuckDuckGo Instant Answer
+    # ----------------------------------
     try:
-        response = requests.get(url, headers=headers, params=querystring, timeout=15)
-        data = response.json()
-        
-        # Google Search API results 'results' array mein deti hai
-        if data.get("results") and len(data["results"]) > 0:
-            # Pehle 2-3 results ko combine karke summary banana
-            snippets = [res.get("description", "") for res in data["results"][:2]]
-            return " ".join(snippets)
-            
-        return None
-    except Exception as e:
-        print(f"Google API Error: {e}")
-        return None
+        ddg = requests.get(
+            "https://api.duckduckgo.com/",
+            params={"q": q, "format": "json"},
+            timeout=10,
+        ).json()
 
-# 2. GOOGLE TRANSLATE (English -> Urdu)
-def google_translate(text, target_lang='ur'):
-    try:
-        base_url = "https://translate.googleapis.com/translate_a/single"
-        params = {
-            "client": "gtx", "sl": "auto", "tl": target_lang, "dt": "t", "q": text
-        }
-        resp = requests.get(base_url, params=params, timeout=5)
-        data = resp.json()
-        
-        translated_text = ""
-        if data and data[0]:
-            for part in data[0]:
-                if part[0]:
-                    translated_text += part[0]
-        return translated_text
+        if ddg.get("AbstractText"):
+            answer = clean(ddg["AbstractText"])
     except:
-        return text
+        pass
 
-# 🌐 API ROUTE
-@app.route('/api/smart-urdu', methods=['GET'])
-def smart_urdu():
-    query = request.args.get('q')
-    if not query: return jsonify({"status": False, "msg": "Query missing!"})
+    # ----------------------------------
+    # 2️⃣ Wikipedia quick extract
+    # ----------------------------------
+    if not answer:
+        try:
+            wiki = requests.get(
+                f"https://en.wikipedia.org/api/rest_v1/page/summary/{q}",
+                timeout=10,
+            ).json()
 
-    # Step 1: Real Google Search se data lo
-    english_answer = search_google_rapid(query)
-    
-    if not english_answer:
-        return jsonify({
-            "status": False, 
-            "msg": "Google ne is sawal ka jawab nahi diya."
-        })
+            if wiki.get("extract"):
+                answer = clean(wiki["extract"])
+        except:
+            pass
 
-    # Step 2: Translate to Urdu
-    urdu_answer = google_translate(english_answer, 'ur')
+    # ----------------------------------
+    # 3️⃣ Web search fallback (lite)
+    # ----------------------------------
+    try:
+        html = requests.get(
+            f"https://lite.duckduckgo.com/lite/?q={q.replace(' ', '+')}",
+            timeout=10,
+        ).text
+
+        soup = BeautifulSoup(html, "html.parser")
+        for a in soup.find_all("a", limit=5):
+            title = clean(a.get_text())
+            link = a.get("href")
+            if title and link:
+                results.append({"title": title, "link": link})
+    except:
+        pass
+
+    # ----------------------------------
+    # Roman Urdu mode
+    # ----------------------------------
+    if lang == "roman" and answer:
+        # small basic transform
+        answer = answer.replace(" is ", " hai ")
+        answer = answer.replace(" was ", " tha ")
+
+    if not answer:
+        answer = "Seedha jawab nahi mila, links check karo."
 
     return jsonify({
         "status": True,
-        "brand": "𝐀𝐇𝐌𝐀𝐃 𝐑𝐃𝐗 (Google Engine)",
-        "original": english_answer[:500], # First 500 chars for reference
-        "translated": urdu_answer
+        "question": q,
+        "answer": answer[:300],
+        "results": results[:5],
+        "owner": "AHMAD RDX"
     })
 
+
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=10000)
-    
+    app.run(host="0.0.0.0", port=5000)
