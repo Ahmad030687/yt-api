@@ -1,102 +1,45 @@
 from flask import Flask, request, jsonify
-import requests
-from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
-# ----------------------------------
-# helper
-# ----------------------------------
-def clean(text):
-    return " ".join(text.split())
-
-
-# ----------------------------------
-# API
-# ----------------------------------
-@app.route("/")
+@app.route('/')
 def home():
-    return "AHMAD RDX Search Engine Running"
+    return "<h1>RDX Search Engine is Live on Render!</h1>"
 
+@app.route('/api/search', methods=['GET'])
+def search_api():
+    query = request.args.get('q')
+    if not query:
+        return jsonify({"error": "Sawal likho ustad!"}), 400
 
-@app.route("/api/search", methods=["GET"])
-def search():
-    q = request.args.get("q")
-    lang = request.args.get("lang", "roman")
-
-    if not q:
-        return jsonify({"status": False, "error": "Query missing"})
-
-    results = []
-    answer = ""
-
-    # ----------------------------------
-    # 1️⃣ DuckDuckGo Instant Answer
-    # ----------------------------------
     try:
-        ddg = requests.get(
-            "https://api.duckduckgo.com/",
-            params={"q": q, "format": "json"},
-            timeout=10,
-        ).json()
+        results = []
+        # DuckDuckGo se taaza tareen data uthana (No API Key)
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=5):
+                results.append({
+                    "title": r['title'],
+                    "link": r['href'],
+                    "snippet": r['body']
+                })
 
-        if ddg.get("AbstractText"):
-            answer = clean(ddg["AbstractText"])
-    except:
-        pass
+        # Agar results mil jayein
+        if results:
+            return jsonify({
+                "status": "Success",
+                "owner": "AHMAD RDX",
+                "query": query,
+                "data": results
+            })
+        else:
+            return jsonify({"error": "Koi result nahi mila."}), 404
 
-    # ----------------------------------
-    # 2️⃣ Wikipedia quick extract
-    # ----------------------------------
-    if not answer:
-        try:
-            wiki = requests.get(
-                f"https://en.wikipedia.org/api/rest_v1/page/summary/{q}",
-                timeout=10,
-            ).json()
-
-            if wiki.get("extract"):
-                answer = clean(wiki["extract"])
-        except:
-            pass
-
-    # ----------------------------------
-    # 3️⃣ Web search fallback (lite)
-    # ----------------------------------
-    try:
-        html = requests.get(
-            f"https://lite.duckduckgo.com/lite/?q={q.replace(' ', '+')}",
-            timeout=10,
-        ).text
-
-        soup = BeautifulSoup(html, "html.parser")
-        for a in soup.find_all("a", limit=5):
-            title = clean(a.get_text())
-            link = a.get("href")
-            if title and link:
-                results.append({"title": title, "link": link})
-    except:
-        pass
-
-    # ----------------------------------
-    # Roman Urdu mode
-    # ----------------------------------
-    if lang == "roman" and answer:
-        # small basic transform
-        answer = answer.replace(" is ", " hai ")
-        answer = answer.replace(" was ", " tha ")
-
-    if not answer:
-        answer = "Seedha jawab nahi mila, links check karo."
-
-    return jsonify({
-        "status": True,
-        "question": q,
-        "answer": answer[:300],
-        "results": results[:5],
-        "owner": "AHMAD RDX"
-    })
-
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host='0.0.0.0', port=10000)
+    
