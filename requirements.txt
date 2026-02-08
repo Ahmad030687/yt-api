@@ -6,3 +6,4 @@ google-generativeai
 beautifulsoup4
 duckduckgo-search
 wikipedia
+flask_core
