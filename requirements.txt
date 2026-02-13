@@ -2,8 +2,4 @@ flask
 requests
 yt-dlp
 gunicorn
-google-generativeai
-beautifulsoup4
-duckduckgo-search
-wikipedia
 flask-cors
